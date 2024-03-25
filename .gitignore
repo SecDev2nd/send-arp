@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# cmake
+*.cmake
+CMakeCache.txt
+send-arp
+CMakeFiles/
